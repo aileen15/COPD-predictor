@@ -1,5 +1,5 @@
 1. Python package dependence:
-   To run Preprocessing.py and predication.py, the following package must be installed
+   To run Preprocessing.py and prediction.py, the following package must be installed
    sklearn
    matplotlib
    numpy
@@ -16,7 +16,7 @@
        --mergeall = True
         
 
-3. Instruction for running predication.py:
+3. Instruction for running prediction.py:
    (i) By default, no command line arguments need be provided
        the default values: 
        binary_classify = True
@@ -25,7 +25,7 @@
    (ii)Assume "copd_single_year.csv" or "copd_multi_year.csv" exists 
   (iii)For input non-default value, please follow the command line instruction.
        For example:
-       predication.py --binary=False --single_year=False 
+       prediction.py --binary=False --single_year=False 
   (iv) While running the prediction program, a few graphic windows will be displayed. The graphic window must be manully closed before the program   
        can continue.
 
