@@ -239,6 +239,7 @@ def main(argv):
     op.print_help()
     (opts, args) = op.parse_args()
     opts.single_year = False
+    opts.binary_classify = False
     if opts.binary_classify:
         print "Classification Mode: Binary"
     else:

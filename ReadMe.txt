@@ -1,5 +1,5 @@
 1. Python package dependence:
-   To run predication.py and Sentiment.py, the following package must be installed
+   To run Preprocessing.py and predication.py, the following package must be installed
    sklearn
    matplotlib
    numpy
