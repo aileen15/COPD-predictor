@@ -9,6 +9,7 @@
 import matplotlib.pyplot as plt
 import csv
 
+from sklearn.decomposition import PCA
 from sklearn.feature_selection import SelectKBest
 from sklearn.feature_selection import chi2
 from sklearn.model_selection import StratifiedKFold
@@ -26,12 +27,15 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import make_pipeline
 from sklearn import metrics
-from util import *
+from sklearn.metrics import confusion_matrix
+import os, random, operator, sys
 import datetime
 from optparse import OptionParser
 
-
-def parseCSVfile(csv_file, binary_classify, year, single_year):
+#----------------------------------------------------------------------------------
+# Parsing the input csv file and initialzing the feature dataset for the prediction
+#----------------------------------------------------------------------------------
+def parseCSVfile(csv_file, binary_classify, year, single_year, num_classes):
     with open(csv_file, 'rb') as f:
         reader = csv.reader(f)
         records = list(reader)
@@ -41,6 +45,7 @@ def parseCSVfile(csv_file, binary_classify, year, single_year):
     
     startIndex = 4
     for j in range(startIndex, cols-1):
+        # calculate the average postive sum and negative sum
         psum = 0
         pcount = 0
         nsum = 0
@@ -61,6 +66,7 @@ def parseCSVfile(csv_file, binary_classify, year, single_year):
     for i in range(1, len(records)):
         if year == "" or records[i][0] == year:
             value = float(records[i][cols-1])
+            # set the target y value for classification
             if binary_classify == True:
                 y = 1 if value > 0 else 0              
             else:
@@ -77,62 +83,30 @@ def parseCSVfile(csv_file, binary_classify, year, single_year):
                         y = 2
                     else:
                         y = 3
-                else:
-##                    if value < nsum:
-##                        y = -1                
-##                    elif value < psum:
-##                        y = 0
-##                    else:
-##                        y = 1
-                
-                    if value < nsum:
-                        y = -2
-                    elif value < 0:
-                        y = -1
-                    elif value < psum:
-                        y = 1
+                else:                   
+                    if num_classes == 3:
+                        if value < nsum:
+                            y = -1                
+                        elif value < psum:
+                            y = 0
+                        else:
+                            y = 1
                     else:
-                        y = 2
+                        if value < nsum:
+                            y = -2
+                        elif value < 0:
+                            y = -1
+                        elif value < psum:
+                            y = 1
+                        else:
+                            y = 2
             features = {}
-            for j in range(startIndex, cols-1):               
+            for j in range(startIndex, cols-1):                
                 features[keys[j]] = float(records[i][j])
                     
             data.append((features, y))        
-    print len(data)
+    print('Number of rows =' + str(len(data)))
     return data
-
-
-#-------------------------------------------------------------
-# Using SGD algorithm with eta = 0.01 do the linear prediction
-#-------------------------------------------------------------
-def learnPredictor(trainExamples, testExamples, numIters, eta):
-    '''
-    Given |trainExamples| and |testExamples| (each one is a list of (x,y)
-    pairs), a |featureExtractor| to apply to x, and the number of iterations to
-    train |numIters|, the step size |eta|, return the weight vector (sparse
-    feature vector) learned.
-    '''
-    weights = {}  # feature => weight
-    for i in range(0, numIters):
-        for trainExample in trainExamples:
-            x = trainExample[0]
-            y = trainExample[1]           
-            features = x            
-            for k in features:
-                if k not in weights:
-                    weights[k] = 0
-            d = 1 - sum(weights[k] * features[k] for k in features) * y                        
-            for k in features:
-                if d > 0:
-                    gradient_loss = - features[k] * y
-                else:
-                    gradient_loss = 0               
-                weights[k] = weights[k] - eta * gradient_loss
-        predictor = lambda(x) : (1 if dotProduct(x, weights) >= 0 else -1)        
-        trainLoss = evaluatePredictor(trainExamples, predictor)
-        testLoss = evaluatePredictor(testExamples, predictor)
-    print "Iteration %d: training error = %f, test error = %f" % (i, trainLoss, testLoss)
-    return weights
 
 #-----------------------------------------------------------------
 # Draw the comparison bar chart for given names and values
@@ -160,31 +134,13 @@ def plotPerfScore(rfecv):
     plt.title('Cross-Validation Scores of Best Chi-Squared Features')
     plt.show()
 
-#---------------------------------------------------------------------------------------------
+#------------------------------------------------------------------------------------------------
 # Predicte if the county level cost increase/decrease for binary classification or predict the 
 # increase/decrease percentage for multi-class classification for given csv. It compares the
 # classification accuracy performance of a few algorithms from SKLearn package.
-#---------------------------------------------------------------------------------------------
-def classification(csv_file, binary_classify = True, year = "", single_year = True):     
-    data = parseCSVfile(csv_file, binary_classify, year, single_year) 
-    if binary_classify == True: #baseline model using SGD
-        train_size = (int)(0.7*len(data))
-        trainExamples = data[:train_size]
-        testExamples = data[train_size:]
-        weights = learnPredictor(trainExamples, testExamples, numIters=20, eta=0.01)
-        print "Weights = ", weights
-
-        example = data[0]
-        features = example[0]
-        names = []
-        for feature in features:
-            names.append(feature)
-        values = []
-        for key in weights:
-            values.append(weights[key])
-        compareBarChart('Feature', 'Weight', 'Weights of Features', names, values, 90)
-
-
+#--------------------------------------------------------------------------------------------------
+def classification(csv_file, binary_classify = True, year = "", single_year = True, num_classes = 3):     
+    data = parseCSVfile(csv_file, binary_classify, year, single_year, num_classes) 
     X_input = []
     Y_input = []
     for example in data:    
@@ -196,6 +152,7 @@ def classification(csv_file, binary_classify = True, year = "", single_year = Tr
         Y_input.append(example[1])
    
     k=len(features)
+    # calculate chi-Squared score to determine the optimal numbre of features
     try:
         ch2 = SelectKBest(chi2, k)
         X_input = ch2.fit_transform(X_input, Y_input)
@@ -226,23 +183,28 @@ def classification(csv_file, binary_classify = True, year = "", single_year = Tr
         a = datetime.datetime.now()
         try:           
             #Feature scaling through standardization (or Z-score normalization)
-            std_clf = make_pipeline(StandardScaler(), classifier)
+            #PCA - Linear dimensionality reduction to a lower dimensional space
+            std_clf = make_pipeline(StandardScaler(), PCA(), classifier)                    
             std_clf.fit(X_train, Y_train)            
             pred = std_clf.predict(X_test)                    
             b = datetime.datetime.now()            
             accuracy = accuracy_score(pred, Y_test)            
-            Accuracy.append(accuracy)
+            Accuracy.append(accuracy)           
             Model.append(classifier.__class__.__name__)
             print('Accuracy of '+classifier.__class__.__name__+' is '+str(accuracy))
             train_accuracy = std_clf.score(X_train, Y_train)
             print('Traing Accuracy of '+classifier.__class__.__name__+' is '+str(train_accuracy))
+            print('Confusion Matrix of '+classifier.__class__.__name__)
+            print confusion_matrix(Y_test, pred)
             print('Elapsed time = '+ str(b-a))
         except:
             pass
     if binary_classify == True:
         model = "Binary Model"
     else:
-        model = "Multiclass Model"
+        if single_year == False:
+            num_classes = 6
+        model = "Multiclass Model (number of classes = " + str(num_classes) + ")"
     if single_year == True:
         title = 'Accuracies of Models for Single Year'
     else:
@@ -266,20 +228,27 @@ def main(argv):
     op = OptionParser()
     op.add_option("-B", "--binary", dest="binary_classify",
                   default=True,    
-                  help="classification mode: True for binary and False for multi-class.")   
+                  help="classification mode: True for binary and False for multi-class.")
+    op.add_option("-S", "--single", dest="single_year",
+                  default=True,    
+                  help="prediction year: True for single year and False for multi-year.")   
     op.add_option("-Y", "--year", dest="year",
                   default="", type="string",
                   help="Year: 2012, 2013, ..." )
     
     op.print_help()
     (opts, args) = op.parse_args()
+    opts.single_year = False
     if opts.binary_classify:
         print "Classification Mode: Binary"
     else:
-        print "Classification Mode: Multi-Class"        
-    classification("copd_perc_all.csv", True, "", True)
-    #classification("copd_merge_2012-2015.csv", False, 0, "")
-
+        print "Classification Mode: Multi-Class"
+    if opts.single_year == True:
+        inputfile = "copd_single_year.csv"
+    else:
+        inputfile = "copd_multi_year.csv"
+    classification(inputfile, opts.binary_classify, opts.year, opts.single_year)   
+   
 if __name__ == '__main__':
     main(sys.argv)
 
